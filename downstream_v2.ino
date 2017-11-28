@@ -28,6 +28,11 @@ unsigned const int STATE_EMPTY = 8;
 unsigned const int STATE_EMPTY_1 = 801;
 
 
+
+unsigned const int STATE_SLEEP = 9;
+unsigned const int STATE_SLEEP_1 = 901;
+
+
 unsigned const int STATE_ERROR = 100;
 
 
@@ -43,7 +48,7 @@ AccelStepper stepper(AccelStepper::DRIVER, stepPin, dirPin);
 //stepper sleep
 boolean isStepperEnabled = true;
 elapsedMillis sleepTimer;
-unsigned long SLEEP_TIME = 30000;
+unsigned long SLEEP_TIME = 1000 * 3;
 
 const int FALL_OFFSET = 8 * 80;
 
@@ -114,13 +119,15 @@ void initStepper() {
   stepper.setAcceleration(2000);
 }
 
-void loop() {
 
+void loop() {
+  
   if(state == STATE_START) {
     stepper.enableOutputs();
     digitalWrite(ledPin, LOW);
     isStepperEnabled = true;
     ballsToGo = 0;
+    sleepTimer = 0;
     delay(200);
     dPrintln("homing...");
     state = STATE_HOMING;  
@@ -178,8 +185,12 @@ void loop() {
       }
     }
 
+    if (sleepTimer > SLEEP_TIME) {  
+        state = STATE_SLEEP;
+    }
+
     if(ballsToGo > 0) {
-    
+      sleepTimer = 0;
       //calculate speed
       // 200 rv * 16 stps = 3200 stps pr rv.
       // steps per ball =  s/b
@@ -193,9 +204,7 @@ void loop() {
       if (runningTimeout > 3000) {  
         newSpeed = MAX_SPEED;
       }
-      if (runningTimeout > 10000) {  
-        state = STATE_EMPTY;
-      }
+      
       if(newSpeed != speed) {
         speed = newSpeed;
         dPrint("adjusted speed: ");
@@ -224,16 +233,28 @@ void loop() {
     }
   }
 
+  if(state == STATE_SLEEP) {
+    dPrintln("go to sleep.");
+    stepper.disableOutputs();
+    isStepperEnabled = false;
+    delay(200);
+    state = STATE_SLEEP_1;
+  }
+
+  if(state == STATE_SLEEP_1) {
+    if (Serial.available() > 0) {
+      state = STATE_START;
+    }
+  }
 
   if (state == STATE_EMPTY) {
-    dPrintln("empty");
+    dPrintln("empty.");
 
     digitalWrite(ledPin, HIGH);
     stepper.disableOutputs();
     isStepperEnabled = false;
     delay(200);
     state = STATE_EMPTY_1;
-
   }
 
   if(state == STATE_EMPTY_1) {
